@@ -1,9 +1,10 @@
 import datetime
 import gzip
+import heapq
 import logging
 import os
 import re
-from collections import namedtuple, Counter
+from collections import namedtuple, Counter, defaultdict
 from configparser import ConfigParser
 from itertools import groupby
 from operator import itemgetter
@@ -68,17 +69,12 @@ def process_line(line, line_reg):
             'time': float(line_dict['request_time'])}
 
 
-def read_lines(last_file_log):
+def read_lines_gen(last_file_log):
     log_file = gen_open(last_file_log)
     line_reg = make_reg_exp_for_line()
-    total = processed = 0
     for line in log_file:
         parsed_line = process_line(line, line_reg)
-        total += 1
-        if parsed_line:
-            processed += 1
-            yield parsed_line
-    print("%s of %s lines processed" % (processed, total))
+        yield parsed_line
     log_file.close()
 
 
@@ -95,7 +91,7 @@ def make_reg_exp_for_line():
     remote_user_reg = '(?P<remote_user>(\-)|(.+))'
     http_x_real_ip_reg = '(?P<http_x_real_ip>(\-)|(.+))'
     date_reg = r'\[(?P<date_time>\d{2}\/[a-z]{3}\/\d{4}:\d{2}:\d{2}:\d{2} (\+|\-)\d{4})\]'
-    url_reg = r'(\"(GET|POST|HEAD|PUT|UPDATE|DELETE)? (?P<url>.+) (http\/1\.(1|0))?")'
+    url_reg = r'(\"(GET|POST|HEAD|PUT|UPDATE|DELETE|OPTIONS)? (?P<url>.+) (http\/1\.(1|0))?")'
     status_code_reg = r'(?P<status_code>\d{3})'
     bytes_send_reg = r'(?P<bytes_send>\d+)'
     referer_reg = r'(["](?P<referer>(\-)|(.+))["])'
@@ -121,30 +117,33 @@ def calc_med(times):
 
 
 def analyze(last_file_log, config):
-    parsed_lines_gen = read_lines(last_file_log)
+    dict_parsed_lines = defaultdict(list)
+    total = total_time = processed = 0
 
-    parsed_lines = list(parsed_lines_gen)
-    parsed_lines.sort(key=itemgetter('url'))
-    list_url = [log['url'] for log in parsed_lines]
+    parsed_lines_gen = read_lines_gen(last_file_log)
 
-    count_request = len(parsed_lines)
-    group_by_url = groupby(parsed_lines, key=itemgetter('url'))
-    dict_url_with_times = {url: [time['time'] for time in list(items)] for url, items in group_by_url}
-    count_url = Counter(list_url)
-    time_sum_by_url = {url: sum(dict_url_with_times[url]) for url in count_url}
-    time_sum_counter = Counter(time_sum_by_url)
-    most_common_url = time_sum_counter.most_common(int(config['Main'].get('REPORT_SIZE')))
+    for parsed_line in parsed_lines_gen:
+        total += 1
+        if parsed_line:
+            processed += 1
+            dict_parsed_lines[parsed_line['url']].append(parsed_line['time'])
+            total_time += parsed_line['time']
+    url_time_dict = {}
+    for url in dict_parsed_lines:
+        url_time_dict[url] = {'time_sum': sum(dict_parsed_lines[url])}
+    most_common_url = heapq.nlargest(int(config['Main'].get('REPORT_SIZE')), url_time_dict, key=lambda x: url_time_dict[x]['time_sum'])
 
-    count_percent = {url[0]: count_url[url[0]] * 100 / count_request for url in most_common_url}
-    count_most_common_url = {url: {'count': dict_url_with_times[url]} for url in count_url if url in most_common_url}
-    time_sum = sum(time_sum_by_url.values())
-    time_percent_by_most_common_url = {url[0]: time_sum_by_url[url[0]] * 100 / time_sum for url in most_common_url}
-    time_average_by_most_common_url = {url[0]: sum(dict_url_with_times[url[0]]) / len(dict_url_with_times[url[0]]) for
-                                       url in most_common_url}
-    time_max_for_most_common_url = {url[0]: max(dict_url_with_times[url[0]]) for url in most_common_url}
-    time_med_by_most_common_url = {url[0]: calc_med(dict_url_with_times[url[0]]) for url in most_common_url}
+    table_dict = defaultdict(dict)
+    for url in most_common_url:
+        table_dict[url]["count"] = len(dict_parsed_lines[url])
+        table_dict[url]["count_perc"] = len(dict_parsed_lines[url]) * 100 / len(dict_parsed_lines)
+        table_dict[url]["time_sum"] = url_time_dict[url]['time_sum']
+        table_dict[url]["time_perc"] = url_time_dict[url]['time_sum'] * 100 / total_time
+        table_dict[url]["time_avg"] = table_dict[url]['time_sum'] / table_dict[url]['count']
+        table_dict[url]["time_max"] = max(dict_parsed_lines[url])
+        table_dict[url]["time_med"] = calc_med(dict_parsed_lines[url])
 
-    return parsed_lines
+    return table_dict
 
 
 def run_analyze(config):
@@ -161,6 +160,7 @@ def setup_logger(config):
 
 if __name__ == '__main__':
     import time
+
     start_time = time.time()
 
     config = gen_config()
