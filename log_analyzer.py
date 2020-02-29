@@ -55,7 +55,7 @@ def gen_open(file_log):
     if file_log.ext == '.gz':
         return gzip.open(file_log.path, 'r')
     if file_log.ext == '.log':
-        return open(file_log.path)
+        return open(file_log.path, 'rb')
 
 
 def parse_lines(log_file):
@@ -68,15 +68,11 @@ def parse_lines(log_file):
         if not line_parsed:
             print(f'BAD FORMAT - {line}')
             continue
-        # print(f'G0DE FORMAT- {line}')
         line_dict = line_parsed.groupdict()
-        try:
-            parsed_data.append({
-                'url': line_dict['url'],
-                'time': float(line_dict['request_time'])
-            })
-        except Exception as e:
-            raise e
+        parsed_data.append({
+            'url': line_dict['url'],
+            'time': float(line_dict['request_time'])
+        })
     return parsed_data
 
 
@@ -93,7 +89,7 @@ def make_reg_exp_for_line():
     remote_user_reg = '(?P<remote_user>(\-)|(.+))'
     http_x_real_ip_reg = '(?P<http_x_real_ip>(\-)|(.+))'
     date_reg = r'\[(?P<date_time>\d{2}\/[a-z]{3}\/\d{4}:\d{2}:\d{2}:\d{2} (\+|\-)\d{4})\]'
-    url_reg = r'(\"(GET|POST) (?P<url>.+) (http\/1\.(1|0)"))'
+    url_reg = r'(\"(GET|POST|HEAD|PUT|UPDATE|DELETE)? (?P<url>.+) (http\/1\.(1|0))?")'
     status_code_reg = r'(?P<status_code>\d{3})'
     bytes_send_reg = r'(?P<bytes_send>\d+)'
     referer_reg = r'(["](?P<referer>(\-)|(.+))["])'
@@ -130,6 +126,7 @@ def analyze(last_file_log, config):
     time_sum_by_url = {url: sum(dict_url_with_times[url]) for url in count_url}
     time_sum_counter = Counter(time_sum_by_url)
     most_common_url = time_sum_counter.most_common(int(config['Main'].get('REPORT_SIZE')))
+
     count_percent = {url[0]: count_url[url[0]] * 100 / count_request for url in most_common_url}
     count_most_common_url = {url: {'count': dict_url_with_times[url]} for url in count_url if url in most_common_url}
     time_sum = sum(time_sum_by_url.values())
