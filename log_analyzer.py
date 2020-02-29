@@ -126,6 +126,7 @@ def analyze(last_file_log, config):
     parsed_lines = list(parsed_lines_gen)
     parsed_lines.sort(key=itemgetter('url'))
     list_url = [log['url'] for log in parsed_lines]
+
     count_request = len(parsed_lines)
     group_by_url = groupby(parsed_lines, key=itemgetter('url'))
     dict_url_with_times = {url: [time['time'] for time in list(items)] for url, items in group_by_url}
@@ -159,9 +160,14 @@ def setup_logger(config):
 
 
 if __name__ == '__main__':
+    import time
+    start_time = time.time()
+
     config = gen_config()
     logger = setup_logger(config)
     try:
         run_analyze(config)
     except Exception as e:
         logger.exception(e)
+    finally:
+        print("--- %s seconds ---" % (time.time() - start_time))
