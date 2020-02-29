@@ -17,7 +17,7 @@ def gen_config(path=None):
     config['Main'] = {
         "LOG_DIR": os.path.join(BASE_DIR, 'logs', 'nginx'),
         "REPORT_DIR": os.path.join(BASE_DIR, 'REPORT_DIR'),
-        "REPORT_SIZE": 4,
+        "REPORT_SIZE": 100,
         "time_sum": 10,
     }
     if not os.path.exists(path_to_log):
@@ -133,22 +133,26 @@ def analyze(last_file_log, config):
         url_time_dict[url] = {'time_sum': sum(dict_parsed_lines[url])}
     most_common_url = heapq.nlargest(int(config['Main'].get('REPORT_SIZE')), url_time_dict, key=lambda x: url_time_dict[x]['time_sum'])
 
-    table_dict = defaultdict(dict)
+    table_list = []
     for url in most_common_url:
-        table_dict[url]["count"] = len(dict_parsed_lines[url])
-        table_dict[url]["count_perc"] = len(dict_parsed_lines[url]) * 100 / len(dict_parsed_lines)
-        table_dict[url]["time_sum"] = url_time_dict[url]['time_sum']
-        table_dict[url]["time_perc"] = url_time_dict[url]['time_sum'] * 100 / total_time
-        table_dict[url]["time_avg"] = table_dict[url]['time_sum'] / table_dict[url]['count']
-        table_dict[url]["time_max"] = max(dict_parsed_lines[url])
-        table_dict[url]["time_med"] = calc_med(dict_parsed_lines[url])
+        tmp_dict = {'url': url, "count": len(dict_parsed_lines[url]),
+                    "count_perc": len(dict_parsed_lines[url]) * 100 / len(dict_parsed_lines),
+                    "time_sum": url_time_dict[url]['time_sum'],
+                    "time_perc": url_time_dict[url]['time_sum'] * 100 / total_time,
+                    "time_avg": url_time_dict[url]['time_sum'] / len(dict_parsed_lines[url]),
+                    "time_max": max(dict_parsed_lines[url]), "time_med": calc_med(dict_parsed_lines[url])}
+        table_list.append(tmp_dict)
+    return table_list
 
-    return table_dict
+
+def render_html(tables_for_list, config):
+    pass
 
 
 def run_analyze(config):
     last_file_log = get_last_file(config)
-    analyze(last_file_log, config)
+    tables_for_list = analyze(last_file_log, config)
+    render_html(tables_for_list, config)
 
 
 def setup_logger(config):
