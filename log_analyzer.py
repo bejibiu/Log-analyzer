@@ -58,22 +58,28 @@ def gen_open(file_log):
         return open(file_log.path, 'rb')
 
 
-def parse_lines(log_file):
+def process_line(line, line_reg):
+    line_parsed = re.search(line_reg, line.decode())
+    if not line_parsed:
+        print(f'BAD FORMAT - {line}')
+        return False
+    line_dict = line_parsed.groupdict()
+    return {'url': line_dict['url'],
+            'time': float(line_dict['request_time'])}
+
+
+def read_lines(last_file_log):
+    log_file = gen_open(last_file_log)
     line_reg = make_reg_exp_for_line()
-    parsed_data = []
-    lines = (line for line in log_file)
-    for line in lines:
-        line_parsed = re.search(line_reg, line.decode())
-        # TODO: check conformity
-        if not line_parsed:
-            print(f'BAD FORMAT - {line}')
-            continue
-        line_dict = line_parsed.groupdict()
-        parsed_data.append({
-            'url': line_dict['url'],
-            'time': float(line_dict['request_time'])
-        })
-    return parsed_data
+    total = processed = 0
+    for line in log_file:
+        parsed_line = process_line(line, line_reg)
+        total += 1
+        if parsed_line:
+            processed += 1
+            yield parsed_line
+    print("%s of %s lines processed" % (processed, total))
+    log_file.close()
 
 
 def make_reg_exp_for_line():
@@ -115,8 +121,9 @@ def calc_med(times):
 
 
 def analyze(last_file_log, config):
-    log_file = gen_open(last_file_log)
-    parsed_lines = parse_lines(log_file)
+    parsed_lines_gen = read_lines(last_file_log)
+
+    parsed_lines = list(parsed_lines_gen)
     parsed_lines.sort(key=itemgetter('url'))
     list_url = [log['url'] for log in parsed_lines]
     count_request = len(parsed_lines)
