@@ -8,6 +8,7 @@ from collections import namedtuple, Counter, defaultdict
 from configparser import ConfigParser
 from itertools import groupby
 from operator import itemgetter
+from string import Template
 
 
 def gen_config(path=None):
@@ -16,8 +17,9 @@ def gen_config(path=None):
     config = ConfigParser()
     config['Main'] = {
         "LOG_DIR": os.path.join(BASE_DIR, 'logs', 'nginx'),
-        "REPORT_DIR": os.path.join(BASE_DIR, 'REPORT_DIR'),
+        "REPORT_DIR": os.path.join(BASE_DIR, 'report_dir'),
         "REPORT_SIZE": 100,
+        "TEMPLATE": os.path.join(BASE_DIR, 'template', 'report.html'),
         "time_sum": 10,
     }
     if not os.path.exists(path_to_log):
@@ -144,7 +146,17 @@ def analyze(last_file_log, config):
 
 
 def render_html(tables_for_list, config):
+    with open(config['Main'].get('TEMPLATE'), 'r') as f:
+        template_str = f.read()
+    template = Template(template_str)
+
+    if not os.path.exists(os.path.join(config['Main'].get('REPORT_DIR'))):
+        os.mkdir(os.path.join(config['Main'].get('REPORT_DIR')))
+    report_path = os.path.join(config['Main'].get('REPORT_DIR'), 'report.html')
+    with open(report_path, 'w') as report:
+        report.write(template.safe_substitute(table_json=tables_for_list))
     pass
+
 
 
 def run_analyze(config):
