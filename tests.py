@@ -1,11 +1,13 @@
 import datetime
+import logging
 import os
 import re
 from unittest import mock
 
 import pytest
 
-from log_analyzer import gen_config, run_analyze, get_last_file, get_date_from_file, parse_lines, make_reg_exp_for_line
+from log_analyzer import gen_config, run_analyze, get_last_file, get_date_from_file, make_reg_exp_for_line, \
+    checked_for_numbers_parsed_line, process_line
 
 
 def test_report(default_config):
@@ -63,8 +65,9 @@ def test_get_invalid_date_from_file():
     assert False
 
 
-def test_parse_line(opened_last_file, parsed_last_file):
-    assert parse_lines(opened_last_file) == parsed_last_file
+# def test_parse_line(opened_last_file, parsed_last_file, caplog):
+#     line_reg = make_reg_exp_for_line()
+#     assert process_line(opened_last_file, line_reg, caplog) == parsed_last_file
 
 
 @pytest.mark.parametrize("line, url, request_time", [
@@ -81,7 +84,7 @@ def test_parse_line(opened_last_file, parsed_last_file):
      '"Mozilla/5.0 (Windows; U; Windows NT 6.0; ru; rv:1.9.0.12) Gecko/2009070611 Firefox/3.0.12 (.NET CLR '
      '3.5.30729)" "-" "-" "-" 0.003\n', "/export/appinstall_raw/2017-06-29/", '0.003'),
     # ('127.0.0.1 -  - [29/Jun/2017:05:07:25 +0300] "0" 400 166 "-" "-" "-" "-" "-" 0.001\n', "0", "0.001"), #This false test =(
-                         ])
+])
 def test_right_reg_exp(line, url, request_time):
     reg = make_reg_exp_for_line()
     data = re.search(reg, line)
@@ -100,3 +103,9 @@ def test_right_reg_exp(line, url, request_time):
     assert datadict['http_X_REQUEST_ID']
     assert datadict['http_X_RB_USER']
     assert datadict['request_time'] == request_time
+
+
+def test_checked_for_numbers_parsed_line():
+    with pytest.raises(TypeError):
+        checked_for_numbers_parsed_line(logging.getLogger(), 1000, 2001)
+    assert checked_for_numbers_parsed_line(logging.getLogger(), 1002, 2001)

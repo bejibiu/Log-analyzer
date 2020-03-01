@@ -133,10 +133,7 @@ def analyze(last_file_log, config, logger):
             total_time += parsed_line['time']
         if total % 100000 == 0:
             logger.info(f"read {total} line. Good {processed} line ")
-    if processed * 2 < total:
-        logger.error(f"Parsed only {processed} of {total} line")
-        raise TypeError(f"More than half of the file could not be parsed.")
-    logger.info(f"Parsed {processed} of {total} line")
+    checked_for_numbers_parsed_line(logger, processed, total)
     url_time_dict = {url: {'time_sum': sum(dict_parsed_lines[url])} for url in dict_parsed_lines}
     most_common_url = heapq.nlargest(int(config['Main'].get('REPORT_SIZE')), url_time_dict, key=lambda x: url_time_dict[x]['time_sum'])
 
@@ -151,6 +148,14 @@ def analyze(last_file_log, config, logger):
                     "time_med": calc_med(dict_parsed_lines[url])}
         table_list.append(tmp_dict)
     return table_list
+
+
+def checked_for_numbers_parsed_line(logger, processed, total):
+    if processed * 2 < total:
+        logger.error(f"Parsed only {processed} of {total} line")
+        raise TypeError(f"More than half of the file could not be parsed.")
+    logger.info(f"Parsed {processed} of {total} line")
+    return True
 
 
 def render_html(tables_for_list, config):

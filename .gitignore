@@ -224,3 +224,4 @@ pip-selfcheck.json
 
 ### Project ###
 report_dir/
+logs/nginx/
