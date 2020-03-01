@@ -221,3 +221,6 @@ pip-selfcheck.json
 .history
 
 # End of https://www.gitignore.io/api/venv,python,pycharm,visualstudiocode
+
+### Project ###
+report_dir/

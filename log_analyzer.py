@@ -33,8 +33,9 @@ def get_ext(log_file):
     return extension
 
 
-def get_last_file(config):
+def get_last_file(config, logger):
     files_logs = [filelog for filelog in os.listdir(config['Main'].get('LOG_DIR')) if filelog.endswith(('gz', 'log'))]
+    logger.info(f"find {len(files_logs)} files :{files_logs}")
     FileLog = namedtuple('FileLog', 'path date ext')
     parsed_log = []
     for log_file in files_logs:
@@ -61,21 +62,21 @@ def gen_open(file_log):
         return open(file_log.path, 'rb')
 
 
-def process_line(line, line_reg):
+def process_line(line, line_reg, logger):
     line_parsed = re.search(line_reg, line.decode())
     if not line_parsed:
-        print(f'BAD FORMAT - {line}')
+        logger.info(f'could not parse the string - {line}')
         return False
     line_dict = line_parsed.groupdict()
     return {'url': line_dict['url'],
             'time': float(line_dict['request_time'])}
 
 
-def read_lines_gen(last_file_log):
+def read_lines_gen(last_file_log, logger):
     log_file = gen_open(last_file_log)
     line_reg = make_reg_exp_for_line()
     for line in log_file:
-        parsed_line = process_line(line, line_reg)
+        parsed_line = process_line(line, line_reg, logger)
         yield parsed_line
     log_file.close()
 
@@ -118,11 +119,11 @@ def calc_med(times):
     return times[n // 2]
 
 
-def analyze(last_file_log, config):
+def analyze(last_file_log, config, logger):
     dict_parsed_lines = defaultdict(list)
     total = total_time = processed = 0
 
-    parsed_lines_gen = read_lines_gen(last_file_log)
+    parsed_lines_gen = read_lines_gen(last_file_log, logger)
 
     for parsed_line in parsed_lines_gen:
         total += 1
@@ -130,17 +131,24 @@ def analyze(last_file_log, config):
             processed += 1
             dict_parsed_lines[parsed_line['url']].append(parsed_line['time'])
             total_time += parsed_line['time']
+        if total % 100000 == 0:
+            logger.info(f"read {total} line. Good {processed} line ")
+    if processed * 2 < total:
+        logger.error(f"Parsed only {processed} of {total} line")
+        raise TypeError(f"More than half of the file could not be parsed.")
+    logger.info(f"Parsed {processed} of {total} line")
     url_time_dict = {url: {'time_sum': sum(dict_parsed_lines[url])} for url in dict_parsed_lines}
     most_common_url = heapq.nlargest(int(config['Main'].get('REPORT_SIZE')), url_time_dict, key=lambda x: url_time_dict[x]['time_sum'])
 
     table_list = []
-    for url in most_common_url:
+    for num, url in enumerate(most_common_url):
         tmp_dict = {'url': url, "count": len(dict_parsed_lines[url]),
                     "count_perc": len(dict_parsed_lines[url]) * 100 / processed,
                     "time_sum": url_time_dict[url]['time_sum'],
                     "time_perc": url_time_dict[url]['time_sum'] * 100 / total_time,
                     "time_avg": url_time_dict[url]['time_sum'] / len(dict_parsed_lines[url]),
-                    "time_max": max(dict_parsed_lines[url]), "time_med": calc_med(dict_parsed_lines[url])}
+                    "time_max": max(dict_parsed_lines[url]),
+                    "time_med": calc_med(dict_parsed_lines[url])}
         table_list.append(tmp_dict)
     return table_list
 
@@ -151,20 +159,23 @@ def render_html(tables_for_list, config):
     template = Template(template_str)
 
     if not os.path.exists(os.path.join(config['Main'].get('REPORT_DIR'))):
+        logger.info("report dir is created")
         os.mkdir(os.path.join(config['Main'].get('REPORT_DIR')))
     report_path = os.path.join(config['Main'].get('REPORT_DIR'), 'report.html')
     with open(report_path, 'w') as report:
         report.write(template.safe_substitute(table_json=tables_for_list))
+    logger.info('report is create')
 
 
-def run_analyze(config):
-    last_file_log = get_last_file(config)
-    tables_for_list = analyze(last_file_log, config)
+def run_analyze(config, logger):
+    last_file_log = get_last_file(config, logger)
+    logger.info(f"last file is {last_file_log.path}")
+    tables_for_list = analyze(last_file_log, config, logger)
     render_html(tables_for_list, config)
 
 
 def setup_logger(config):
-    logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname).1s%(message)s',
+    logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname).1s %(message)s',
                         filename=config['Main'].get('LOG_FILE') if config['Main'].get('LOG_FILE') else None,
                         datefmt='%Y.%m.%d %H:%M:%S')
     return logging.getLogger(__name__)
@@ -178,7 +189,8 @@ if __name__ == '__main__':
     config = gen_config()
     logger = setup_logger(config)
     try:
-        run_analyze(config)
+        logger.info('run analyze')
+        run_analyze(config, logger)
     except Exception as e:
         logger.exception(e)
     finally:
