@@ -136,7 +136,7 @@ def analyze(last_file_log, config):
     table_list = []
     for url in most_common_url:
         tmp_dict = {'url': url, "count": len(dict_parsed_lines[url]),
-                    "count_perc": len(dict_parsed_lines[url]) * 100 / len(dict_parsed_lines),
+                    "count_perc": len(dict_parsed_lines[url]) * 100 / processed,
                     "time_sum": url_time_dict[url]['time_sum'],
                     "time_perc": url_time_dict[url]['time_sum'] * 100 / total_time,
                     "time_avg": url_time_dict[url]['time_sum'] / len(dict_parsed_lines[url]),
@@ -155,8 +155,6 @@ def render_html(tables_for_list, config):
     report_path = os.path.join(config['Main'].get('REPORT_DIR'), 'report.html')
     with open(report_path, 'w') as report:
         report.write(template.safe_substitute(table_json=tables_for_list))
-    pass
-
 
 
 def run_analyze(config):
