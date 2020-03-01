@@ -128,9 +128,7 @@ def analyze(last_file_log, config):
             processed += 1
             dict_parsed_lines[parsed_line['url']].append(parsed_line['time'])
             total_time += parsed_line['time']
-    url_time_dict = {}
-    for url in dict_parsed_lines:
-        url_time_dict[url] = {'time_sum': sum(dict_parsed_lines[url])}
+    url_time_dict = {url: {'time_sum': sum(dict_parsed_lines[url])} for url in dict_parsed_lines}
     most_common_url = heapq.nlargest(int(config['Main'].get('REPORT_SIZE')), url_time_dict, key=lambda x: url_time_dict[x]['time_sum'])
 
     table_list = []
