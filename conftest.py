@@ -6,18 +6,32 @@ from log_analyzer import gen_config
 @pytest.fixture
 def default_config(tmpdir):
     p = tmpdir.mkdir('config').join('config.ini')
-    p.write(f'[Main]\nLOG_DIR = {tmpdir.strpath + "/logs"}\n')
+    p.write(f'[Main]\nLOG_DIR = {tmpdir.strpath + "/logs"}\nREPORT_DIR = {tmpdir.strpath + "/report"}')
     return gen_config(p.strpath)
 
 
 @pytest.fixture
-def create_last_file_log(tmpdir):
+def create_log_dir(tmpdir):
+    d = tmpdir.mkdir('logs')
+    return d
+
+
+@pytest.fixture
+def create_last_file_log_20200212(tmpdir):
     d = tmpdir.mkdir('logs')
     d.join('access.log-20200130.gz').write(b' ')
     d.join('access.log-20200131.gz').write(b' ')
     last_file = d.join('access.log-20200212.gz')
     last_file.write(b' ')
     return last_file.strpath
+
+
+@pytest.fixture
+def create_report_20200212(tmpdir):
+    d = tmpdir.mkdir('report')
+    report = d.join('report-2020.02.12.html')
+    report.write(' ')
+    return report
 
 
 @pytest.fixture

@@ -4,10 +4,8 @@ import heapq
 import logging
 import os
 import re
-from collections import namedtuple, Counter, defaultdict
+from collections import defaultdict, namedtuple
 from configparser import ConfigParser
-from itertools import groupby
-from operator import itemgetter
 from string import Template
 
 
@@ -34,11 +32,17 @@ def get_ext(log_file):
 
 
 def get_last_file(config, logger):
-    files_logs = [filelog for filelog in os.listdir(config['Main'].get('LOG_DIR')) if filelog.endswith(('gz', 'log'))]
-    logger.info(f"find {len(files_logs)} files :{files_logs}")
+    path_to_log = config['Main'].get('LOG_DIR')
+    if not os.path.exists(path_to_log):
+        logger.error('Log dir is not exist')
+        raise FileNotFoundError
+    log_files = [filelog for filelog in os.listdir(path_to_log) if filelog.endswith(('gz', 'log'))]
+    if not log_files:
+        return False
+    logger.info(f"find {len(log_files)} files :{log_files}")
     FileLog = namedtuple('FileLog', 'path date ext')
     parsed_log = []
-    for log_file in files_logs:
+    for log_file in log_files:
         path_to_file = os.path.join(config['Main'].get('LOG_DIR'), log_file)
         date_from_file = get_date_from_file(log_file)
         ext = get_ext(log_file)
@@ -119,7 +123,7 @@ def calc_med(times):
     return times[n // 2]
 
 
-def analyze(last_file_log, config, logger):
+def run_processed(last_file_log, config, logger):
     dict_parsed_lines = defaultdict(list)
     total = total_time = processed = 0
 
@@ -135,7 +139,8 @@ def analyze(last_file_log, config, logger):
             logger.info(f"read {total} line. Good {processed} line ")
     checked_for_numbers_parsed_line(logger, processed, total)
     url_time_dict = {url: {'time_sum': sum(dict_parsed_lines[url])} for url in dict_parsed_lines}
-    most_common_url = heapq.nlargest(int(config['Main'].get('REPORT_SIZE')), url_time_dict, key=lambda x: url_time_dict[x]['time_sum'])
+    most_common_url = heapq.nlargest(int(config['Main'].get('REPORT_SIZE')), url_time_dict,
+                                     key=lambda x: url_time_dict[x]['time_sum'])
 
     table_list = []
     for num, url in enumerate(most_common_url):
@@ -158,7 +163,7 @@ def checked_for_numbers_parsed_line(logger, processed, total):
     return True
 
 
-def render_html(tables_for_list, config):
+def render_html(tables_for_list, config, date_report):
     with open(config['Main'].get('TEMPLATE'), 'r') as f:
         template_str = f.read()
     template = Template(template_str)
@@ -166,17 +171,35 @@ def render_html(tables_for_list, config):
     if not os.path.exists(os.path.join(config['Main'].get('REPORT_DIR'))):
         logger.info("report dir is created")
         os.mkdir(os.path.join(config['Main'].get('REPORT_DIR')))
-    report_path = os.path.join(config['Main'].get('REPORT_DIR'), 'report.html')
+    name_report = get_report_name(date_report)
+    report_path = os.path.join(config['Main'].get('REPORT_DIR'), name_report)
     with open(report_path, 'w') as report:
         report.write(template.safe_substitute(table_json=tables_for_list))
     logger.info('report is create')
 
 
+def get_report_name(date_report):
+    name_report = f'report-{date_report.strftime("%Y.%m.%d")}.html'
+    return name_report
+
+
+def check_by_report_already_exist(path_to_report_dir, date):
+    report_name = get_report_name(date)
+    return os.path.exists(os.path.join(path_to_report_dir, report_name))
+
+
 def run_analyze(config, logger):
     last_file_log = get_last_file(config, logger)
+    if not last_file_log:
+        logging.info('Log files not found')
+        return True
     logger.info(f"last file is {last_file_log.path}")
-    tables_for_list = analyze(last_file_log, config, logger)
-    render_html(tables_for_list, config)
+    if check_by_report_already_exist(config['Main'].get('REPORT_DIR'), last_file_log.date):
+        logging.info('Report already exist')
+        return True
+    tables_for_list = run_processed(last_file_log, config, logger)
+    render_html(tables_for_list, config, date_report=last_file_log.date)
+    return True
 
 
 def setup_logger(config):

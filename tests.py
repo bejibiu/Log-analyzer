@@ -2,16 +2,15 @@ import datetime
 import logging
 import os
 import re
-from unittest import mock
 
 import pytest
 
 from log_analyzer import gen_config, run_analyze, get_last_file, get_date_from_file, make_reg_exp_for_line, \
-    checked_for_numbers_parsed_line, process_line
+    checked_for_numbers_parsed_line, process_line, check_by_report_already_exist
 
 
-def test_report(default_config):
-    run_analyze(default_config)
+def test_report(default_config, create_last_file_log_20200212):
+    run_analyze(default_config, logging.getLogger())
     files = os.listdir(default_config['Main'].get('REPORT_DIR'))
     assert "report.html" in files
     data = render_file(os.path.join(default_config['Main'].get('REPORT_DIR'), 'report.html'))
@@ -23,13 +22,6 @@ def render_file(path_to_report):
     with open(path_to_report) as f:
         data = f.read()
     return data.splitlines()
-
-
-def test_parse_ags():
-    with mock.patch('sys.atgv', [''] + ['--config']):
-        pass
-    # not parse
-    # not exist
 
 
 def test_create_log_with_custom_config(tmpdir):
@@ -50,9 +42,9 @@ def test_create_log_with_fail_custom_config(tmpdir):
         gen_config(p.strpath)
 
 
-def test_get_last_file_log(create_last_file_log, default_config):
-    last_file_path = get_last_file(default_config)
-    assert last_file_path.path == create_last_file_log
+def test_get_last_file_log(create_last_file_log_20200212, default_config):
+    last_file_path = get_last_file(default_config, logging.getLogger())
+    assert last_file_path.path == create_last_file_log_20200212
 
 
 def test_get_date_from_file():
@@ -109,3 +101,12 @@ def test_checked_for_numbers_parsed_line():
     with pytest.raises(TypeError):
         checked_for_numbers_parsed_line(logging.getLogger(), 1000, 2001)
     assert checked_for_numbers_parsed_line(logging.getLogger(), 1002, 2001)
+
+
+def test_if_file_report_already_exist(create_last_file_log_20200212, default_config, create_report_20200212):
+    date = datetime.datetime.strptime("20200212", "%Y%m%d")
+    assert check_by_report_already_exist(create_report_20200212.dirname, date=date)
+
+
+def test_run_analyze_without_logs_file(default_config, create_log_dir, caplog):
+    run_analyze(default_config, logging.getLogger())
