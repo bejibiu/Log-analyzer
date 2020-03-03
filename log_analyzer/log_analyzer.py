@@ -1,29 +1,12 @@
 import datetime
 import gzip
 import heapq
-import logging
 import os
 import re
 from collections import defaultdict, namedtuple
-from configparser import ConfigParser
 from string import Template
 
-
-def gen_config(path=None):
-    BASE_DIR = os.path.dirname(__file__)
-    path_to_log = path if path else os.path.join(BASE_DIR, 'config.ini')
-    config = ConfigParser()
-    config['Main'] = {
-        "LOG_DIR": os.path.join(BASE_DIR, 'logs', 'nginx'),
-        "REPORT_DIR": os.path.join(BASE_DIR, 'report_dir'),
-        "REPORT_SIZE": 100,
-        "TEMPLATE": os.path.join(BASE_DIR, 'template', 'report.html'),
-        "time_sum": 10,
-    }
-    if not os.path.exists(path_to_log):
-        raise OSError('config file not found')
-    config.read(path_to_log)
-    return config
+from log_analyzer.helper import calc_med
 
 
 def get_ext(log_file):
@@ -36,27 +19,31 @@ def get_last_file(config, logger):
     if not os.path.exists(path_to_log):
         logger.error('Log dir is not exist')
         raise FileNotFoundError
-    log_files = [filelog for filelog in os.listdir(path_to_log) if filelog.endswith(('gz', 'log'))]
+    log_files = [filelog for filelog in os.listdir(path_to_log) if re.search(r'nginx-access-ui.log-(\d){8}.(log|gz)$',
+                                                                             filelog)]
     if not log_files:
         return False
-    logger.info(f"find {len(log_files)} files :{log_files}")
-    FileLog = namedtuple('FileLog', 'path date ext')
-    parsed_log = []
-    for log_file in log_files:
-        path_to_file = os.path.join(config['Main'].get('LOG_DIR'), log_file)
-        date_from_file = get_date_from_file(log_file)
-        ext = get_ext(log_file)
-        if all((path_to_file, date_from_file, ext)):
-            parsed_log.append(FileLog(path_to_file, date_from_file, ext))
+    logger.info(f"found {len(log_files)} files :{log_files}")
+    parsed_log = [get_arg_for_file_log(config, log_file) for log_file in log_files]
     return max(parsed_log, key=lambda x: x.date)
 
 
+def get_arg_for_file_log(config, log_file):
+    FileLog = namedtuple('FileLog', 'path date ext')
+    path_to_file = os.path.join(config['Main'].get('LOG_DIR'), log_file)
+    date_from_file = get_date_from_file(log_file)
+    ext = get_ext(log_file)
+    return FileLog(path_to_file, date_from_file, ext)
+
+    # if all((path_to_file, date_from_file, ext)):
+    #     return FileLog(path_to_file, date_from_file, ext)
+    # return False
+
+
 def get_date_from_file(log_file):
-    pattern = re.compile(r"(?<=nginx-access-ui.log-)\d{8}")
+    pattern = re.compile(r"\d{8}")
     match = re.search(pattern, log_file)
-    if match:
-        return datetime.datetime.strptime(match.group(), "%Y%m%d")
-    return False
+    return datetime.datetime.strptime(match.group(), "%Y%m%d")
 
 
 def gen_open(file_log):
@@ -72,8 +59,17 @@ def process_line(line, line_reg, logger):
         logger.info(f'could not parse the string - {line}')
         return False
     line_dict = line_parsed.groupdict()
-    return {'url': line_dict['url'],
+    url = get_url_from_request(line_dict['url'])
+    return {'url': url,
             'time': float(line_dict['request_time'])}
+
+
+def get_url_from_request(url):
+    url_from_request = 1
+    request = url.split(' ')
+    if len(request) == 3:
+        return request[url_from_request]
+    return url
 
 
 def read_lines_gen(last_file_log, logger):
@@ -92,13 +88,14 @@ def make_reg_exp_for_line():
     $remote_addr $remote_user $http_x_real_ip [$time_local] "$request"'$status $body_bytes_sent "$http_referer"
     "$http_user_agent" "$http_x_forwarded_for" "$http_X_REQUEST_ID" "$http_X_RB_USER"'$request_time'
 
-    127.0.0.1 - - [29/Jun/2017:03:50:22 +0300] "GET /api/v2/banner/25019354 HTTP/1.1" 200 927 "-" "Lynx/2.8.8dev.9 libwww-FM/2.14 SSL-MM/1.4.1 GNUTLS/2.10.5" "-" "1498697422-2190034393-4708-9752759" "dc7161be3" 0.390\n'
+    127.0.0.1 - - [29/Jun/2017:03:50:22 +0300] "GET /api/v2/banner/25019354 HTTP/1.1" 200 927 "-"
+    "Lynx/2.8.8dev.9 libwww-FM/2.14 SSL-MM/1.4.1 GNUTLS/2.10.5" "-" "1498697422-2190034393-4708-9752759" "dc7161be3" 0.390\n'
     """
     ip_reg = r'(?P<ip>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})'
     remote_user_reg = '(?P<remote_user>(\-)|(.+))'
     http_x_real_ip_reg = '(?P<http_x_real_ip>(\-)|(.+))'
     date_reg = r'\[(?P<date_time>\d{2}\/[a-z]{3}\/\d{4}:\d{2}:\d{2}:\d{2} (\+|\-)\d{4})\]'
-    url_reg = r'(\"(GET|POST|HEAD|PUT|UPDATE|DELETE|OPTIONS)? (?P<url>.+) (http\/1\.(1|0))?")'
+    url_reg = r'(["](?P<url>(.+))["])'
     status_code_reg = r'(?P<status_code>\d{3})'
     bytes_send_reg = r'(?P<bytes_send>\d+)'
     referer_reg = r'(["](?P<referer>(\-)|(.+))["])'
@@ -113,31 +110,12 @@ def make_reg_exp_for_line():
         f'{request_time_reg}', re.IGNORECASE)
 
 
-def calc_med(times):
-    n = len(times)
-    times.sort()
-    if n % 2 == 0:
-        med1 = times[n // 2]
-        med2 = times[n // 2 - 1]
-        return (med1 + med2) / 2
-    return times[n // 2]
-
-
 def run_processed(last_file_log, config, logger):
-    dict_parsed_lines = defaultdict(list)
-    total = total_time = processed = 0
-
     parsed_lines_gen = read_lines_gen(last_file_log, logger)
 
-    for parsed_line in parsed_lines_gen:
-        total += 1
-        if parsed_line:
-            processed += 1
-            dict_parsed_lines[parsed_line['url']].append(parsed_line['time'])
-            total_time += parsed_line['time']
-        if total % 100000 == 0:
-            logger.info(f"read {total} line. Good {processed} line ")
-    checked_for_numbers_parsed_line(logger, processed, total)
+    processed, total, total_time, dict_parsed_lines = get_common_params(logger, parsed_lines_gen)
+
+    checked_for_numbers_parsed_line(config, logger, processed, total)
     url_time_dict = {url: {'time_sum': sum(dict_parsed_lines[url])} for url in dict_parsed_lines}
     most_common_url = heapq.nlargest(int(config['Main'].get('REPORT_SIZE')), url_time_dict,
                                      key=lambda x: url_time_dict[x]['time_sum'])
@@ -155,22 +133,36 @@ def run_processed(last_file_log, config, logger):
     return table_list
 
 
-def checked_for_numbers_parsed_line(logger, processed, total):
-    if processed * 2 < total:
+def get_common_params(logger, parsed_lines_gen):
+    dict_parsed_lines = defaultdict(list)
+    processed = total = total_time = 0
+    for parse_line in parsed_lines_gen:
+        total += 1
+        if parse_line:
+            processed += 1
+            dict_parsed_lines[parse_line['url']].append(parse_line['time'])
+            total_time += parse_line['time']
+        if total % 100000 == 0:
+            logger.info(f"read {total} line. Good {processed} line ")
+    return processed, total, total_time, dict_parsed_lines
+
+
+def checked_for_numbers_parsed_line(config, logger, processed, total):
+    if float(config['Main'].get('failure_perc')) > processed * 100 / total:
         logger.error(f"Parsed only {processed} of {total} line")
         raise TypeError(f"More than half of the file could not be parsed.")
     logger.info(f"Parsed {processed} of {total} line")
     return True
 
 
-def render_html(tables_for_list, config, date_report):
+def render_html(tables_for_list, config, logger, date_report):
     with open(config['Main'].get('TEMPLATE'), 'r') as f:
         template_str = f.read()
     template = Template(template_str)
 
     if not os.path.exists(os.path.join(config['Main'].get('REPORT_DIR'))):
-        logger.info("report dir is created")
         os.mkdir(os.path.join(config['Main'].get('REPORT_DIR')))
+        logger.info("report dir is created")
     name_report = get_report_name(date_report)
     report_path = os.path.join(config['Main'].get('REPORT_DIR'), name_report)
     with open(report_path, 'w') as report:
@@ -191,35 +183,12 @@ def check_by_report_already_exist(path_to_report_dir, date):
 def run_analyze(config, logger):
     last_file_log = get_last_file(config, logger)
     if not last_file_log:
-        logging.info('Log files not found')
+        logger.info('Log files not found')
         return True
     logger.info(f"last file is {last_file_log.path}")
     if check_by_report_already_exist(config['Main'].get('REPORT_DIR'), last_file_log.date):
-        logging.info('Report already exist')
+        logger.info('Report already exist')
         return True
     tables_for_list = run_processed(last_file_log, config, logger)
-    render_html(tables_for_list, config, date_report=last_file_log.date)
+    render_html(tables_for_list, config, logger, date_report=last_file_log.date)
     return True
-
-
-def setup_logger(config):
-    logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname).1s %(message)s',
-                        filename=config['Main'].get('LOG_FILE') if config['Main'].get('LOG_FILE') else None,
-                        datefmt='%Y.%m.%d %H:%M:%S')
-    return logging.getLogger(__name__)
-
-
-if __name__ == '__main__':
-    import time
-
-    start_time = time.time()
-
-    config = gen_config()
-    logger = setup_logger(config)
-    try:
-        logger.info('run analyze')
-        run_analyze(config, logger)
-    except Exception as e:
-        logger.exception(e)
-    finally:
-        print("--- %s seconds ---" % (time.time() - start_time))

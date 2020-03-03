@@ -5,17 +5,16 @@ import re
 
 import pytest
 
-from log_analyzer import gen_config, run_analyze, get_last_file, get_date_from_file, make_reg_exp_for_line, \
-    checked_for_numbers_parsed_line, process_line, check_by_report_already_exist
+from log_analyzer.helper import setup_config
+from log_analyzer.log_analyzer import run_analyze, get_last_file, get_date_from_file, make_reg_exp_for_line, \
+    checked_for_numbers_parsed_line, check_by_report_already_exist
 
 
 def test_report(default_config, create_last_file_log_20200212):
     run_analyze(default_config, logging.getLogger())
+    name_report = "report-2020.02.12.html"
     files = os.listdir(default_config['Main'].get('REPORT_DIR'))
-    assert "report.html" in files
-    data = render_file(os.path.join(default_config['Main'].get('REPORT_DIR'), 'report.html'))
-    assert len(data) == default_config['Main'].get('REPORT_SIZE')
-    assert "time_sum" in data
+    assert any(name_report in file for file in files)
 
 
 def render_file(path_to_report):
@@ -28,7 +27,7 @@ def test_create_log_with_custom_config(tmpdir):
     p = tmpdir.mkdir('sub').join('config.ini')
     new_report_size = "7"
     p.write(f'[Main]\nREPORT_SIZE = {new_report_size}\n')
-    config = gen_config(p.strpath)
+    config = setup_config(p.strpath)
     assert config['Main']['REPORT_DIR']
     assert config['Main']['REPORT_SIZE'] == new_report_size
     assert config['Main']['LOG_DIR']
@@ -39,7 +38,7 @@ def test_create_log_with_fail_custom_config(tmpdir):
     new_report_size = "7"
     p.write(f'[MainREPORT_SIZE = {new_report_size}\n')
     with pytest.raises(Exception):
-        gen_config(p.strpath)
+        setup_config(p.strpath)
 
 
 def test_get_last_file_log(create_last_file_log_20200212, default_config):
@@ -54,7 +53,7 @@ def test_get_date_from_file():
 
 def test_get_invalid_date_from_file():
     date = get_date_from_file('access.lg-20200212.gz')
-    assert False
+    assert date == datetime.datetime(2020, 2, 12)
 
 
 # def test_parse_line(opened_last_file, parsed_last_file, caplog):
@@ -86,7 +85,7 @@ def test_right_reg_exp(line, url, request_time):
     assert datadict['remote_user']
     assert datadict['http_x_real_ip']
     assert datadict['date_time']
-    assert datadict['url'] == url
+    assert url in datadict['url']
     assert datadict['status_code']
     assert datadict['bytes_send']
     assert datadict['referer']
@@ -97,10 +96,11 @@ def test_right_reg_exp(line, url, request_time):
     assert datadict['request_time'] == request_time
 
 
-def test_checked_for_numbers_parsed_line():
+def test_checked_for_numbers_parsed_line(default_config):
     with pytest.raises(TypeError):
-        checked_for_numbers_parsed_line(logging.getLogger(), 1000, 2001)
-    assert checked_for_numbers_parsed_line(logging.getLogger(), 1002, 2001)
+        checked_for_numbers_parsed_line(default_config, logging.getLogger(), 1000, 2001)
+    assert checked_for_numbers_parsed_line(default_config, logging.getLogger(), 1002, 2001)
+    assert checked_for_numbers_parsed_line(default_config, logging.getLogger(), 1000, 2000)
 
 
 def test_if_file_report_already_exist(create_last_file_log_20200212, default_config, create_report_20200212):
