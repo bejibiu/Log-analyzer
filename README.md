@@ -22,7 +22,7 @@ How install
 ---------
 * Download project
 ```shell script
-git clone <!set link>
+git clone https://github.com/bejibiu/Log-analyzer.git
 ```
 
 Usage example
