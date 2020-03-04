@@ -3,10 +3,9 @@ import gzip
 import heapq
 import os
 import re
+import statistics
 from collections import defaultdict, namedtuple
 from string import Template
-
-from log_analyzer.helper import calc_med
 
 
 def get_ext(log_file):
@@ -19,8 +18,8 @@ def get_last_file(config, logger):
     if not os.path.exists(path_to_log):
         logger.error('Log dir is not exist')
         raise FileNotFoundError
-    log_files = [filelog for filelog in os.listdir(path_to_log) if re.search(r'nginx-access-ui.log-(\d){8}.(log|gz)$',
-                                                                             filelog)]
+    log_files = [log_file for log_file in os.listdir(path_to_log) if re.search(r'nginx-access-ui.log-(\d){8}.(log|gz)$',
+                                                                             log_file)]
     if not log_files:
         return False
     logger.info(f"found {len(log_files)} files :{log_files}")
@@ -35,10 +34,6 @@ def get_arg_for_file_log(config, log_file):
     ext = get_ext(log_file)
     return FileLog(path_to_file, date_from_file, ext)
 
-    # if all((path_to_file, date_from_file, ext)):
-    #     return FileLog(path_to_file, date_from_file, ext)
-    # return False
-
 
 def get_date_from_file(log_file):
     pattern = re.compile(r"\d{8}")
@@ -48,9 +43,8 @@ def get_date_from_file(log_file):
 
 def gen_open(file_log):
     if file_log.ext == '.gz':
-        return gzip.open(file_log.path, 'r')
-    if file_log.ext == '.log':
-        return open(file_log.path, 'rb')
+        return gzip.open(file_log.path)
+    return open(file_log.path, 'rb')
 
 
 def process_line(line, line_reg, logger):
@@ -92,8 +86,8 @@ def make_reg_exp_for_line():
     "Lynx/2.8.8dev.9 libwww-FM/2.14 SSL-MM/1.4.1 GNUTLS/2.10.5" "-" "1498697422-2190034393-4708-9752759" "dc7161be3" 0.390\n'
     """
     ip_reg = r'(?P<ip>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})'
-    remote_user_reg = '(?P<remote_user>(\-)|(.+))'
-    http_x_real_ip_reg = '(?P<http_x_real_ip>(\-)|(.+))'
+    remote_user_reg = '(?P<remote_user>(-)|(.+))'
+    http_x_real_ip_reg = '(?P<http_x_real_ip>(-)|(.+))'
     date_reg = r'\[(?P<date_time>\d{2}\/[a-z]{3}\/\d{4}:\d{2}:\d{2}:\d{2} (\+|\-)\d{4})\]'
     url_reg = r'(["](?P<url>(.+))["])'
     status_code_reg = r'(?P<status_code>\d{3})'
@@ -122,13 +116,14 @@ def run_processed(last_file_log, config, logger):
 
     table_list = []
     for num, url in enumerate(most_common_url):
-        tmp_dict = {'url': url, "count": len(dict_parsed_lines[url]),
+        tmp_dict = {'url': url,
+                    "count": len(dict_parsed_lines[url]),
                     "count_perc": len(dict_parsed_lines[url]) * 100 / processed,
                     "time_sum": url_time_dict[url]['time_sum'],
                     "time_perc": url_time_dict[url]['time_sum'] * 100 / total_time,
-                    "time_avg": url_time_dict[url]['time_sum'] / len(dict_parsed_lines[url]),
+                    "time_avg": statistics.mean(url_time_dict[url]['time_sum']),
                     "time_max": max(dict_parsed_lines[url]),
-                    "time_med": calc_med(dict_parsed_lines[url])}
+                    "time_med": statistics.median(dict_parsed_lines[url])}
         table_list.append(tmp_dict)
     return table_list
 
@@ -148,7 +143,7 @@ def get_common_params(logger, parsed_lines_gen):
 
 
 def checked_for_numbers_parsed_line(config, logger, processed, total):
-    if float(config['Main'].get('failure_perc')) > processed * 100 / total:
+    if float(config['Main'].get('FAILURE_PERC')) > processed * 100 / total:
         logger.error(f"Parsed only {processed} of {total} line")
         raise TypeError(f"More than half of the file could not be parsed.")
     logger.info(f"Parsed {processed} of {total} line")
@@ -156,10 +151,11 @@ def checked_for_numbers_parsed_line(config, logger, processed, total):
 
 
 def render_html(tables_for_list, config, logger, date_report):
-    with open(config['Main'].get('TEMPLATE'), 'r') as f:
-        template_str = f.read()
-    template = Template(template_str)
+    template = load_template(config)
+    render_to_file(config, logger, date_report, template, tables_for_list)
 
+
+def render_to_file(config, logger, date_report, template, tables_for_list):
     if not os.path.exists(os.path.join(config['Main'].get('REPORT_DIR'))):
         os.mkdir(os.path.join(config['Main'].get('REPORT_DIR')))
         logger.info("report dir is created")
@@ -168,6 +164,13 @@ def render_html(tables_for_list, config, logger, date_report):
     with open(report_path, 'w') as report:
         report.write(template.safe_substitute(table_json=tables_for_list))
     logger.info('report is create')
+
+
+def load_template(config):
+    with open(config['Main'].get('TEMPLATE'), 'r') as f:
+        template_str = f.read()
+    template = Template(template_str)
+    return template
 
 
 def get_report_name(date_report):

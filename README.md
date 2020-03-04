@@ -27,7 +27,7 @@ git clone https://github.com/bejibiu/Log-analyzer.git
 
 Usage example
 --------
-* Run analysis 
+* Run analyze
     ```shell script
     python main.py
     ```
@@ -44,6 +44,8 @@ Settings
 Project has default settings. You can set new settings in file `config.ini` or a configuration using a custom path and them run `main.py` 
 with options `--config <path to config.ini>`.
 
+A custom config is an ini file. In the file in the main section you can describe the settings
+
 Settings:
 
 |Name |Description|Default value|
@@ -53,5 +55,5 @@ Settings:
 |REPORT_DIR| Folder to save the report to| `BASE_DIR`/report_dir
 |REPORT_SIZE| how many URLs with the maximum response time to leave in the report. Calculated by the sum of ' $request_time`| 1000
 |TEMPLATE| Folder with the template for the report|`BASE_DIR`/template/report.html 
-|failure_perc| max percent failure parced time_sum to generate report|50
+|FAILURE_PERC| max percent failure parced time_sum to generate report|50
 |LOG_FILE| File log. if set `None` log will write `stdin`| None
