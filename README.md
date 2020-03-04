@@ -27,7 +27,7 @@ git clone https://github.com/bejibiu/Log-analyzer.git
 
 Usage example
 --------
-* Run main.py
+* Run analysis 
     ```shell script
     python main.py
     ```
