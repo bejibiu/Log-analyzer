@@ -33,6 +33,7 @@ Usage example
     ```
 * Run test:
     ```shell script
+    pip install pytest
     python -m pytest
     ```
 
@@ -41,7 +42,7 @@ Usage example
 Settings
 -----------
 Project has default settings. You can set new settings in file `config.ini` or a configuration using a custom path and them run `main.py` 
-with options `--config <path to config.ini`.
+with options `--config <path to config.ini>`.
 
 Settings:
 
