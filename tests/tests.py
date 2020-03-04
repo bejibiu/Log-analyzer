@@ -56,11 +56,6 @@ def test_get_invalid_date_from_file():
     assert date == datetime.datetime(2020, 2, 12)
 
 
-# def test_parse_line(opened_last_file, parsed_last_file, caplog):
-#     line_reg = make_reg_exp_for_line()
-#     assert process_line(opened_last_file, line_reg, caplog) == parsed_last_file
-
-
 @pytest.mark.parametrize("line, url, request_time", [
     ('127.0.0.1 - - [29/Jun/2017:03:50:22 +0300] "GET /index.html HTTP/1.1" 200 927 "-" "Lynx/2.8.8dev.9 '
      'libwww-FM/2.14 SSL-MM/1.4.1 GNUTLS/2.10.5" "-" "1498697422-2190034393-4708-9752759" "dc7161be3" 0.34\n',
