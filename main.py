@@ -17,7 +17,7 @@ def main():
     logger = setup_logger(config)
     try:
         logger.info('run analyze')
-        run_analyze(config, logger)
+        run_analyze(config['Main'], logger)
     except Exception as e:
         logger.exception(e)
 

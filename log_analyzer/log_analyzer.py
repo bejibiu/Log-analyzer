@@ -14,12 +14,12 @@ def get_ext(log_file):
 
 
 def get_last_file(config, logger):
-    path_to_log = config['Main'].get('LOG_DIR')
+    path_to_log = config.get('LOG_DIR')
     if not os.path.exists(path_to_log):
         logger.error('Log dir is not exist')
         raise FileNotFoundError
     log_files = [log_file for log_file in os.listdir(path_to_log) if re.search(r'nginx-access-ui.log-(\d){8}.(log|gz)$',
-                                                                             log_file)]
+                                                                               log_file)]
     if not log_files:
         return False
     logger.info(f"found {len(log_files)} files :{log_files}")
@@ -29,7 +29,7 @@ def get_last_file(config, logger):
 
 def get_arg_for_file_log(config, log_file):
     FileLog = namedtuple('FileLog', 'path date ext')
-    path_to_file = os.path.join(config['Main'].get('LOG_DIR'), log_file)
+    path_to_file = os.path.join(config.get('LOG_DIR'), log_file)
     date_from_file = get_date_from_file(log_file)
     ext = get_ext(log_file)
     return FileLog(path_to_file, date_from_file, ext)
@@ -76,14 +76,15 @@ def read_lines_gen(last_file_log, logger):
 
 
 def make_reg_exp_for_line():
-    """Compilation reg expression for nginx log
-    log_format ui_short
+    """
+        Compilation reg expression for nginx log
+            log_format ui_short
 
-    $remote_addr $remote_user $http_x_real_ip [$time_local] "$request"'$status $body_bytes_sent "$http_referer"
-    "$http_user_agent" "$http_x_forwarded_for" "$http_X_REQUEST_ID" "$http_X_RB_USER"'$request_time'
+            $remote_addr $remote_user $http_x_real_ip [$time_local] "$request"'$status $body_bytes_sent "$http_referer"
+            "$http_user_agent" "$http_x_forwarded_for" "$http_X_REQUEST_ID" "$http_X_RB_USER"'$request_time'
 
-    127.0.0.1 - - [29/Jun/2017:03:50:22 +0300] "GET /api/v2/banner/25019354 HTTP/1.1" 200 927 "-"
-    "Lynx/2.8.8dev.9 libwww-FM/2.14 SSL-MM/1.4.1 GNUTLS/2.10.5" "-" "1498697422-2190034393-4708-9752759" "dc7161be3" 0.390\n'
+            127.0.0.1 - - [29/Jun/2017:03:50:22 +0300] "GET /api/v2/banner/25019354 HTTP/1.1" 200 927 "-"
+            "Lynx/2.8.8dev.9 libwww-FM/2.14 SSL-MM/1.4.1 GNUTLS/2.10.5" "-" "1498697422-2190034393-4708-9752759" "dc7161be3" 0.390\n'
     """
     ip_reg = r'(?P<ip>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})'
     remote_user_reg = '(?P<remote_user>(-)|(.+))'
@@ -111,17 +112,17 @@ def run_processed(last_file_log, config, logger):
 
     checked_for_numbers_parsed_line(config, logger, processed, total)
     url_time_dict = {url: {'time_sum': sum(dict_parsed_lines[url])} for url in dict_parsed_lines}
-    most_common_url = heapq.nlargest(int(config['Main'].get('REPORT_SIZE')), url_time_dict,
+    most_common_url = heapq.nlargest(int(config.get('REPORT_SIZE')), url_time_dict,
                                      key=lambda x: url_time_dict[x]['time_sum'])
 
     table_list = []
-    for num, url in enumerate(most_common_url):
+    for url in most_common_url:
         tmp_dict = {'url': url,
                     "count": len(dict_parsed_lines[url]),
                     "count_perc": len(dict_parsed_lines[url]) * 100 / processed,
                     "time_sum": url_time_dict[url]['time_sum'],
                     "time_perc": url_time_dict[url]['time_sum'] * 100 / total_time,
-                    "time_avg": statistics.mean(url_time_dict[url]['time_sum']),
+                    "time_avg": statistics.mean(dict_parsed_lines[url]),
                     "time_max": max(dict_parsed_lines[url]),
                     "time_med": statistics.median(dict_parsed_lines[url])}
         table_list.append(tmp_dict)
@@ -138,12 +139,12 @@ def get_common_params(logger, parsed_lines_gen):
             dict_parsed_lines[parse_line['url']].append(parse_line['time'])
             total_time += parse_line['time']
         if total % 100000 == 0:
-            logger.info(f"read {total} line. Good {processed} line ")
+            logger.info(f"read {total} line. Parsed {processed} line ")
     return processed, total, total_time, dict_parsed_lines
 
 
 def checked_for_numbers_parsed_line(config, logger, processed, total):
-    if float(config['Main'].get('FAILURE_PERC')) > processed * 100 / total:
+    if float(config.get('FAILURE_PERC')) > processed * 100 / total:
         logger.error(f"Parsed only {processed} of {total} line")
         raise TypeError(f"More than half of the file could not be parsed.")
     logger.info(f"Parsed {processed} of {total} line")
@@ -156,18 +157,18 @@ def render_html(tables_for_list, config, logger, date_report):
 
 
 def render_to_file(config, logger, date_report, template, tables_for_list):
-    if not os.path.exists(os.path.join(config['Main'].get('REPORT_DIR'))):
-        os.mkdir(os.path.join(config['Main'].get('REPORT_DIR')))
+    if not os.path.exists(os.path.join(config.get('REPORT_DIR'))):
+        os.mkdir(os.path.join(config.get('REPORT_DIR')))
         logger.info("report dir is created")
     name_report = get_report_name(date_report)
-    report_path = os.path.join(config['Main'].get('REPORT_DIR'), name_report)
+    report_path = os.path.join(config.get('REPORT_DIR'), name_report)
     with open(report_path, 'w') as report:
         report.write(template.safe_substitute(table_json=tables_for_list))
     logger.info('report is create')
 
 
 def load_template(config):
-    with open(config['Main'].get('TEMPLATE'), 'r') as f:
+    with open(config.get('TEMPLATE'), 'r') as f:
         template_str = f.read()
     template = Template(template_str)
     return template
@@ -189,7 +190,7 @@ def run_analyze(config, logger):
         logger.info('Log files not found')
         return True
     logger.info(f"last file is {last_file_log.path}")
-    if check_by_report_already_exist(config['Main'].get('REPORT_DIR'), last_file_log.date):
+    if check_by_report_already_exist(config.get('REPORT_DIR'), last_file_log.date):
         logger.info('Report already exist')
         return True
     tables_for_list = run_processed(last_file_log, config, logger)
