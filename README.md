@@ -1,7 +1,7 @@
 Log analyzer
 ========
 This project is intended for analyzing the nginx log. 
-Work with `gzip` and `plant` format.
+Work with `gzip` and `plant` format (`.gz` or without).
 Parses the last file by date in the file name
 
 Requirements

@@ -18,7 +18,7 @@ def get_last_file(config, logger):
     if not os.path.exists(path_to_log):
         logger.error('Log dir is not exist')
         raise FileNotFoundError
-    log_files = [log_file for log_file in os.listdir(path_to_log) if re.search(r'nginx-access-ui.log-(\d){8}.(log|gz)$',
+    log_files = [log_file for log_file in os.listdir(path_to_log) if re.search(r'nginx-access-ui.log-(\d){8}(.gz)?$',
                                                                                log_file)]
     if not log_files:
         return False
