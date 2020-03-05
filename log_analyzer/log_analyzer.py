@@ -21,6 +21,7 @@ def get_last_file(config, logger):
     log_files = [log_file for log_file in os.listdir(path_to_log) if re.search(r'nginx-access-ui.log-(\d){8}(.gz)?$',
                                                                                log_file)]
     if not log_files:
+        logger.info('Log files not found')
         return False
     logger.info(f"found {len(log_files)} files :{log_files}")
     parsed_log = [get_arg_for_file_log(config, log_file) for log_file in log_files]
@@ -179,19 +180,18 @@ def get_report_name(date_report):
     return name_report
 
 
-def check_by_report_already_exist(path_to_report_dir, date):
+def check_by_report_already_exist(path_to_report_dir, date, logger):
     report_name = get_report_name(date)
-    return os.path.exists(os.path.join(path_to_report_dir, report_name))
+    if os.path.exists(os.path.join(path_to_report_dir, report_name)):
+        logger.info('Report already exist')
 
 
 def run_analyze(config, logger):
     last_file_log = get_last_file(config, logger)
     if not last_file_log:
-        logger.info('Log files not found')
         return True
     logger.info(f"last file is {last_file_log.path}")
-    if check_by_report_already_exist(config.get('REPORT_DIR'), last_file_log.date):
-        logger.info('Report already exist')
+    if check_by_report_already_exist(config.get('REPORT_DIR'), last_file_log.date, logger):
         return True
     tables_for_list = run_processed(last_file_log, config, logger)
     render_html(tables_for_list, config, logger, date_report=last_file_log.date)
