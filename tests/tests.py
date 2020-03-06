@@ -2,6 +2,7 @@ import datetime
 import logging
 import os
 import re
+from parser import ParserError
 
 import pytest
 
@@ -92,7 +93,7 @@ def test_right_reg_exp(line, url, request_time):
 
 
 def test_checked_for_numbers_parsed_line(default_config):
-    with pytest.raises(TypeError):
+    with pytest.raises(ParserError):
         checked_for_numbers_parsed_line(default_config, logging.getLogger(), 1000, 2001)
     assert checked_for_numbers_parsed_line(default_config, logging.getLogger(), 1002, 2001)
     assert checked_for_numbers_parsed_line(default_config, logging.getLogger(), 1000, 2000)

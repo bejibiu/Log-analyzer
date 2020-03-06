@@ -11,7 +11,7 @@ def default_config(tmpdir):
     log_path = os.path.join(tmpdir.strpath, "logs")
     report_dir = os.path.join(tmpdir.strpath, "report")
     p.write(f'[Main]\nLOG_DIR = {log_path}\nREPORT_DIR = {report_dir}')
-    return setup_config(p.strpath)
+    return setup_config(p.strpath)['Main']
 
 
 @pytest.fixture

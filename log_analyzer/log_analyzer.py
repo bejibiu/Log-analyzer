@@ -5,7 +5,11 @@ import os
 import re
 import statistics
 from collections import defaultdict, namedtuple
+from parser import ParserError
 from string import Template
+
+LOG_FORMAT_REG = re.compile(r'nginx-access-ui.log-(\d){8}(.gz)?$')
+FileLog = namedtuple('FileLog', 'path date ext')
 
 
 def get_ext(log_file):
@@ -18,8 +22,7 @@ def get_last_file(config, logger):
     if not os.path.exists(path_to_log):
         logger.error('Log dir is not exist')
         raise FileNotFoundError
-    log_files = [log_file for log_file in os.listdir(path_to_log) if re.search(r'nginx-access-ui.log-(\d){8}(.gz)?$',
-                                                                               log_file)]
+    log_files = [log_file for log_file in os.listdir(path_to_log) if re.search(LOG_FORMAT_REG, log_file)]
     if not log_files:
         logger.info('Log files not found')
         return False
@@ -29,7 +32,6 @@ def get_last_file(config, logger):
 
 
 def get_arg_for_file_log(config, log_file):
-    FileLog = namedtuple('FileLog', 'path date ext')
     path_to_file = os.path.join(config.get('LOG_DIR'), log_file)
     date_from_file = get_date_from_file(log_file)
     ext = get_ext(log_file)
@@ -39,10 +41,14 @@ def get_arg_for_file_log(config, log_file):
 def get_date_from_file(log_file):
     pattern = re.compile(r"\d{8}")
     match = re.search(pattern, log_file)
-    return datetime.datetime.strptime(match.group(), "%Y%m%d")
+    try:
+        return datetime.datetime.strptime(match.group(), "%Y%m%d")
+    except ValueError:
+        # logger.
+        return datetime.datetime.min()
 
 
-def gen_open(file_log):
+def open_file_log(file_log):
     if file_log.ext == '.gz':
         return gzip.open(file_log.path)
     return open(file_log.path, 'rb')
@@ -68,7 +74,7 @@ def get_url_from_request(url):
 
 
 def read_lines_gen(last_file_log, logger):
-    log_file = gen_open(last_file_log)
+    log_file = open_file_log(last_file_log)
     line_reg = make_reg_exp_for_line()
     for line in log_file:
         parsed_line = process_line(line, line_reg, logger)
@@ -147,17 +153,13 @@ def get_common_params(logger, parsed_lines_gen):
 def checked_for_numbers_parsed_line(config, logger, processed, total):
     if float(config.get('FAILURE_PERC')) > processed * 100 / total:
         logger.error(f"Parsed only {processed} of {total} line")
-        raise TypeError(f"More than half of the file could not be parsed.")
+        raise ParserError(f"More than half of the file could not be parsed.")
     logger.info(f"Parsed {processed} of {total} line")
     return True
 
 
 def render_html(tables_for_list, config, logger, date_report):
     template = load_template(config)
-    render_to_file(config, logger, date_report, template, tables_for_list)
-
-
-def render_to_file(config, logger, date_report, template, tables_for_list):
     if not os.path.exists(os.path.join(config.get('REPORT_DIR'))):
         os.mkdir(os.path.join(config.get('REPORT_DIR')))
         logger.info("report dir is created")
