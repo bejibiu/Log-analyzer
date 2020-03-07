@@ -25,7 +25,7 @@ def create_last_file_log_20200212(tmpdir):
     d = tmpdir.mkdir('logs')
     d.join('nginx-access-ui.log-20170628.gz').write(b' ')
     d.join('nginx-access-ui.log-20170629.gz').write(b' ')
-    last_file = d.join('nginx-access-ui.log-20200212.log')
+    last_file = d.join('nginx-access-ui.log-20200212')
     last_file.write(b'1.196.116.32 -  - [29/Jun/2017:03:50:22 +0300] "GET /api/v2/banner/25019354 HTTP/1.1" 200 927 '
                     b'"-" "Lynx/2.8.8dev.9 libwww-FM/2.14 SSL-MM/1.4.1 GNUTLS/2.10.5" "-" '
                     b'"1498697422-2190034393-4708-9752759" "dc7161be3" 0.390')
