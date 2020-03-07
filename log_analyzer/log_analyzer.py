@@ -9,7 +9,7 @@ from collections import defaultdict, namedtuple
 from parser import ParserError
 from string import Template
 
-LOG_FORMAT_REG = re.compile(r'nginx-access-ui.log-(\d){8}(.gz)?$')
+LOG_FORMAT_REG = re.compile(r'nginx-access-ui.log-(?P<log_date>(\d){8})(.gz)?$')
 FileLog = namedtuple('FileLog', 'path date ext')
 
 
@@ -23,30 +23,24 @@ def get_last_file(config):
     if not os.path.exists(path_to_log):
         logging.error('Log dir is not exist')
         raise FileNotFoundError
-    log_files = [log_file for log_file in os.listdir(path_to_log) if re.search(LOG_FORMAT_REG, log_file)]
-    if not log_files:
-        logging.info('Log files not found')
-        return False
-    logging.info(f"found {len(log_files)} files :{log_files}")
-    parsed_log = [get_arg_for_file_log(config, log_file) for log_file in log_files]
-    return max(parsed_log, key=lambda x: x.date)
+    last_log = FileLog(None, datetime.datetime.min, None)
+    for log_file in os.listdir(path_to_log):
+        date_str = re.search(LOG_FORMAT_REG, log_file)
+        date = get_date_from_name_log_file(date_str.groupdict()['log_date']) if date_str else False
+        if date and date > last_log.date:
+            last_log = FileLog(os.path.join(config.get('LOG_DIR'), log_file), date, get_ext(log_file))
+    if last_log.path:
+        return last_log
+    logging.info('Тo log for analytics')
+    return False
 
 
-def get_arg_for_file_log(config, log_file):
-    path_to_file = os.path.join(config.get('LOG_DIR'), log_file)
-    date_from_file = get_date_from_file(log_file)
-    ext = get_ext(log_file)
-    return FileLog(path_to_file, date_from_file, ext)
-
-
-def get_date_from_file(log_file):
-    pattern = re.compile(r"\d{8}")
-    match = re.search(pattern, log_file)
+def get_date_from_name_log_file(date_str):
     try:
-        return datetime.datetime.strptime(match.group(), "%Y%m%d")
+        return datetime.datetime.strptime(date_str, "%Y%m%d")
     except ValueError:
-        logging.info(f'file {log_file} date is not valid. Set min date')
-        return datetime.datetime.min()
+        logging.info(f'file date {date_str} is not valid.')
+        return False
 
 
 def open_file_log(file_log):
@@ -113,12 +107,11 @@ def make_reg_exp_for_line():
         f'{request_time_reg}', re.IGNORECASE)
 
 
-def run_processed(last_file_log, config):
+def analyze_log_file(last_file_log, config):
     parsed_lines_gen = read_lines_gen(last_file_log)
 
-    processed, total, total_time, dict_parsed_lines = get_common_params(parsed_lines_gen)
+    processed, total, total_time, dict_parsed_lines = parsed_line(config, parsed_lines_gen)
 
-    checked_for_numbers_parsed_line(config, processed, total)
     url_time_dict = {url: {'time_sum': sum(dict_parsed_lines[url])} for url in dict_parsed_lines}
     most_common_url = heapq.nlargest(int(config.get('REPORT_SIZE')), url_time_dict,
                                      key=lambda x: url_time_dict[x]['time_sum'])
@@ -137,7 +130,7 @@ def run_processed(last_file_log, config):
     return table_list
 
 
-def get_common_params(parsed_lines_gen):
+def parsed_line(config, parsed_lines_gen):
     dict_parsed_lines = defaultdict(list)
     processed = total = total_time = 0
     for parse_line in parsed_lines_gen:
@@ -148,6 +141,7 @@ def get_common_params(parsed_lines_gen):
             total_time += parse_line['time']
         if total % 100000 == 0:
             logging.info(f"read {total} line. Parsed {processed} line ")
+    checked_for_numbers_parsed_line(config, processed, total)
     return processed, total, total_time, dict_parsed_lines
 
 
@@ -198,6 +192,6 @@ def run_analyze(config):
     logging.info(f"last file is {last_file_log.path}")
     if check_by_report_already_exist(config.get('REPORT_DIR'), last_file_log.date):
         return True
-    tables_for_list = run_processed(last_file_log, config)
+    tables_for_list = analyze_log_file(last_file_log, config)
     render_html(tables_for_list, config, date_report=last_file_log.date)
     return True

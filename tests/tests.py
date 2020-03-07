@@ -6,7 +6,7 @@ from parser import ParserError
 import pytest
 
 from log_analyzer.helper import setup_config
-from log_analyzer.log_analyzer import run_analyze, get_last_file, get_date_from_file, make_reg_exp_for_line, \
+from log_analyzer.log_analyzer import run_analyze, get_last_file, get_date_from_name_log_file, make_reg_exp_for_line, \
     checked_for_numbers_parsed_line, check_by_report_already_exist
 
 
@@ -47,13 +47,13 @@ def test_get_last_file_log(create_last_file_log_20200212, default_config):
 
 
 def test_get_date_from_file():
-    date = get_date_from_file('access.log-20200212.gz')
+    date = get_date_from_name_log_file('20200212')
     assert date == datetime.datetime(2020, 2, 12)
 
 
 def test_get_invalid_date_from_file():
-    date = get_date_from_file('access.lg-20200212.gz')
-    assert date == datetime.datetime(2020, 2, 12)
+    date = get_date_from_name_log_file('20202212')
+    assert date is False
 
 
 @pytest.mark.parametrize("line, url, request_time", [
