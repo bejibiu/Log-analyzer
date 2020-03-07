@@ -68,7 +68,7 @@ def process_line(line, line_reg):
 
 def get_url_from_request(url):
     url_from_request = 1
-    request = url.split(' ')
+    request = url.split()
     if len(request) == 3:
         return request[url_from_request]
     return url
@@ -154,7 +154,7 @@ def get_common_params(parsed_lines_gen):
 def checked_for_numbers_parsed_line(config, processed, total):
     if float(config.get('FAILURE_PERC')) > processed * 100 / total:
         logging.error(f"Parsed only {processed} of {total} line")
-        raise ParserError(f"More than half of the file could not be parsed.")
+        raise ParserError(f"More than {config.get('FAILURE_PERC')}% of the file could not be parsed.")
     logging.info(f"Parsed {processed} of {total} line")
     return True
 
