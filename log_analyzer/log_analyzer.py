@@ -11,6 +11,7 @@ from string import Template
 
 LOG_FORMAT_REG = re.compile(r'nginx-access-ui.log-(?P<log_date>(\d){8})(.gz)?$')
 FileLog = namedtuple('FileLog', 'path date ext')
+HTTP_METHOD = ['GET', 'POST', 'HEAD', 'PUT', 'UPDATE', 'DELETE', 'OPTIONS']
 
 
 def get_ext(log_file):
@@ -61,9 +62,9 @@ def process_line(line, line_reg):
 
 
 def get_url_from_request(url):
-    url_from_request = 1
+    method, url_from_request, protocol = 0, 1, 2
     request = url.split()
-    if len(request) == 3:
+    if (len(request) == 3) and (request[method] in HTTP_METHOD) and ("HTTP" in request[protocol]):
         return request[url_from_request]
     return url
 
