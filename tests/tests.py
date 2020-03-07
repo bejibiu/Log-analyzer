@@ -1,5 +1,4 @@
 import datetime
-import logging
 import os
 import re
 from parser import ParserError
@@ -12,9 +11,9 @@ from log_analyzer.log_analyzer import run_analyze, get_last_file, get_date_from_
 
 
 def test_report(default_config, create_last_file_log_20200212):
-    run_analyze(default_config, logging.getLogger())
+    run_analyze(default_config)
     name_report = "report-2020.02.12.html"
-    files = os.listdir(default_config['Main'].get('REPORT_DIR'))
+    files = os.listdir(default_config.get('REPORT_DIR'))
     assert any(name_report in file for file in files)
 
 
@@ -43,7 +42,7 @@ def test_create_log_with_fail_custom_config(tmpdir):
 
 
 def test_get_last_file_log(create_last_file_log_20200212, default_config):
-    last_file_path = get_last_file(default_config, logging.getLogger())
+    last_file_path = get_last_file(default_config)
     assert last_file_path.path == create_last_file_log_20200212
 
 
@@ -94,9 +93,9 @@ def test_right_reg_exp(line, url, request_time):
 
 def test_checked_for_numbers_parsed_line(default_config):
     with pytest.raises(ParserError):
-        checked_for_numbers_parsed_line(default_config, logging.getLogger(), 1000, 2001)
-    assert checked_for_numbers_parsed_line(default_config, logging.getLogger(), 1002, 2001)
-    assert checked_for_numbers_parsed_line(default_config, logging.getLogger(), 1000, 2000)
+        checked_for_numbers_parsed_line(default_config, 1000, 2001)
+    assert checked_for_numbers_parsed_line(default_config, 1002, 2001)
+    assert checked_for_numbers_parsed_line(default_config, 1000, 2000)
 
 
 def test_if_file_report_already_exist(create_last_file_log_20200212, default_config, create_report_20200212):
@@ -105,4 +104,4 @@ def test_if_file_report_already_exist(create_last_file_log_20200212, default_con
 
 
 def test_run_analyze_without_logs_file(default_config, create_log_dir, caplog):
-    run_analyze(default_config, logging.getLogger())
+    run_analyze(default_config)

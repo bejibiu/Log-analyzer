@@ -4,6 +4,7 @@ import heapq
 import os
 import re
 import statistics
+import logging
 from collections import defaultdict, namedtuple
 from parser import ParserError
 from string import Template
@@ -17,16 +18,16 @@ def get_ext(log_file):
     return extension
 
 
-def get_last_file(config, logger):
+def get_last_file(config):
     path_to_log = config.get('LOG_DIR')
     if not os.path.exists(path_to_log):
-        logger.error('Log dir is not exist')
+        logging.error('Log dir is not exist')
         raise FileNotFoundError
     log_files = [log_file for log_file in os.listdir(path_to_log) if re.search(LOG_FORMAT_REG, log_file)]
     if not log_files:
-        logger.info('Log files not found')
+        logging.info('Log files not found')
         return False
-    logger.info(f"found {len(log_files)} files :{log_files}")
+    logging.info(f"found {len(log_files)} files :{log_files}")
     parsed_log = [get_arg_for_file_log(config, log_file) for log_file in log_files]
     return max(parsed_log, key=lambda x: x.date)
 
@@ -44,7 +45,7 @@ def get_date_from_file(log_file):
     try:
         return datetime.datetime.strptime(match.group(), "%Y%m%d")
     except ValueError:
-        # logger.
+        logging.info(f'file {log_file} date is not valid. Set min date')
         return datetime.datetime.min()
 
 
@@ -54,10 +55,10 @@ def open_file_log(file_log):
     return open(file_log.path, 'rb')
 
 
-def process_line(line, line_reg, logger):
+def process_line(line, line_reg):
     line_parsed = re.search(line_reg, line.decode())
     if not line_parsed:
-        logger.info(f'could not parse the string - {line}')
+        logging.info(f'could not parse the string - {line}')
         return False
     line_dict = line_parsed.groupdict()
     url = get_url_from_request(line_dict['url'])
@@ -73,11 +74,11 @@ def get_url_from_request(url):
     return url
 
 
-def read_lines_gen(last_file_log, logger):
+def read_lines_gen(last_file_log):
     log_file = open_file_log(last_file_log)
     line_reg = make_reg_exp_for_line()
     for line in log_file:
-        parsed_line = process_line(line, line_reg, logger)
+        parsed_line = process_line(line, line_reg)
         yield parsed_line
     log_file.close()
 
@@ -112,12 +113,12 @@ def make_reg_exp_for_line():
         f'{request_time_reg}', re.IGNORECASE)
 
 
-def run_processed(last_file_log, config, logger):
-    parsed_lines_gen = read_lines_gen(last_file_log, logger)
+def run_processed(last_file_log, config):
+    parsed_lines_gen = read_lines_gen(last_file_log)
 
-    processed, total, total_time, dict_parsed_lines = get_common_params(logger, parsed_lines_gen)
+    processed, total, total_time, dict_parsed_lines = get_common_params(parsed_lines_gen)
 
-    checked_for_numbers_parsed_line(config, logger, processed, total)
+    checked_for_numbers_parsed_line(config, processed, total)
     url_time_dict = {url: {'time_sum': sum(dict_parsed_lines[url])} for url in dict_parsed_lines}
     most_common_url = heapq.nlargest(int(config.get('REPORT_SIZE')), url_time_dict,
                                      key=lambda x: url_time_dict[x]['time_sum'])
@@ -136,7 +137,7 @@ def run_processed(last_file_log, config, logger):
     return table_list
 
 
-def get_common_params(logger, parsed_lines_gen):
+def get_common_params(parsed_lines_gen):
     dict_parsed_lines = defaultdict(list)
     processed = total = total_time = 0
     for parse_line in parsed_lines_gen:
@@ -146,28 +147,28 @@ def get_common_params(logger, parsed_lines_gen):
             dict_parsed_lines[parse_line['url']].append(parse_line['time'])
             total_time += parse_line['time']
         if total % 100000 == 0:
-            logger.info(f"read {total} line. Parsed {processed} line ")
+            logging.info(f"read {total} line. Parsed {processed} line ")
     return processed, total, total_time, dict_parsed_lines
 
 
-def checked_for_numbers_parsed_line(config, logger, processed, total):
+def checked_for_numbers_parsed_line(config, processed, total):
     if float(config.get('FAILURE_PERC')) > processed * 100 / total:
-        logger.error(f"Parsed only {processed} of {total} line")
+        logging.error(f"Parsed only {processed} of {total} line")
         raise ParserError(f"More than half of the file could not be parsed.")
-    logger.info(f"Parsed {processed} of {total} line")
+    logging.info(f"Parsed {processed} of {total} line")
     return True
 
 
-def render_html(tables_for_list, config, logger, date_report):
+def render_html(tables_for_list, config, date_report):
     template = load_template(config)
     if not os.path.exists(os.path.join(config.get('REPORT_DIR'))):
         os.mkdir(os.path.join(config.get('REPORT_DIR')))
-        logger.info("report dir is created")
+        logging.info("report dir is created")
     name_report = get_report_name(date_report)
     report_path = os.path.join(config.get('REPORT_DIR'), name_report)
     with open(report_path, 'w') as report:
         report.write(template.safe_substitute(table_json=tables_for_list))
-    logger.info('report is create')
+    logging.info('report is create')
 
 
 def load_template(config):
@@ -182,19 +183,21 @@ def get_report_name(date_report):
     return name_report
 
 
-def check_by_report_already_exist(path_to_report_dir, date, logger):
+def check_by_report_already_exist(path_to_report_dir, date):
     report_name = get_report_name(date)
     if os.path.exists(os.path.join(path_to_report_dir, report_name)):
-        logger.info('Report already exist')
+        logging.info('Report already exist')
+        return True
+    return False
 
 
-def run_analyze(config, logger):
-    last_file_log = get_last_file(config, logger)
+def run_analyze(config):
+    last_file_log = get_last_file(config)
     if not last_file_log:
         return True
-    logger.info(f"last file is {last_file_log.path}")
-    if check_by_report_already_exist(config.get('REPORT_DIR'), last_file_log.date, logger):
+    logging.info(f"last file is {last_file_log.path}")
+    if check_by_report_already_exist(config.get('REPORT_DIR'), last_file_log.date):
         return True
-    tables_for_list = run_processed(last_file_log, config, logger)
-    render_html(tables_for_list, config, logger, date_report=last_file_log.date)
+    tables_for_list = run_processed(last_file_log, config)
+    render_html(tables_for_list, config, date_report=last_file_log.date)
     return True

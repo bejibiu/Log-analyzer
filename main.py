@@ -2,6 +2,7 @@ import argparse
 
 from log_analyzer.helper import setup_logger, setup_config
 from log_analyzer.log_analyzer import run_analyze
+import logging
 
 
 def parse_args():
@@ -14,12 +15,12 @@ def parse_args():
 def main():
     args = parse_args()
     config = setup_config(path=args.path_to_config)
-    logger = setup_logger(config)
+    setup_logger(config)
+    logging.info('run analyze')
     try:
-        logger.info('run analyze')
-        run_analyze(config['Main'], logger)
+        run_analyze(config['Main'])
     except Exception as e:
-        logger.exception(e)
+        logging.exception(e)
 
 
 if __name__ == '__main__':
