@@ -95,8 +95,8 @@ def make_reg_exp_for_line():
             "Lynx/2.8.8dev.9 libwww-FM/2.14 SSL-MM/1.4.1 GNUTLS/2.10.5" "-" "1498697422-2190034393-4708-9752759" "dc7161be3" 0.390\n'
     """
     ip_reg = r'(?P<ip>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})'
-    remote_user_reg = '(?P<remote_user>(-)|(.+))'
-    http_x_real_ip_reg = '(?P<http_x_real_ip>(-)|(.+))'
+    remote_user_reg = r'(?P<remote_user>(\-)|(.+))'
+    http_x_real_ip_reg = r'(?P<http_x_real_ip>(\-)|(.+))'
     date_reg = r'\[(?P<date_time>\d{2}\/[a-z]{3}\/\d{4}:\d{2}:\d{2}:\d{2} (\+|\-)\d{4})\]'
     url_reg = r'(["](?P<url>(.+))["])'
     status_code_reg = r'(?P<status_code>\d{3})'
