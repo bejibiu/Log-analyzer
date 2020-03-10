@@ -41,20 +41,14 @@ def get_date_from_name_log_file(date_str):
         return datetime.datetime.strptime(date_str, "%Y%m%d")
     except ValueError:
         logging.info(f'file date {date_str} is not valid.')
-        return False
-
-
-def open_file_log(file_log):
-    if file_log.ext == '.gz':
-        return gzip.open(file_log.path)
-    return open(file_log.path, 'rb')
+        return None
 
 
 def process_line(line, line_reg):
     line_parsed = re.search(line_reg, line.decode())
     if not line_parsed:
         logging.info(f'could not parse the string - {line}')
-        return False
+        return None
     line_dict = line_parsed.groupdict()
     url = get_url_from_request(line_dict['url'])
     return {'url': url,
@@ -70,12 +64,12 @@ def get_url_from_request(url):
 
 
 def read_lines_gen(last_file_log):
-    log_file = open_file_log(last_file_log)
-    line_reg = make_reg_exp_for_line()
-    for line in log_file:
-        parsed_line = process_line(line, line_reg)
-        yield parsed_line
-    log_file.close()
+    xopen = gzip.open if last_file_log.ext == ".gz" else open
+    with xopen(last_file_log.path, 'rb') as log_file:
+        line_reg = make_reg_exp_for_line()
+        for line in log_file:
+            parsed_line = process_line(line, line_reg)
+            yield parsed_line
 
 
 def make_reg_exp_for_line():
@@ -142,6 +136,7 @@ def parsed_line(config, parsed_lines_gen):
             total_time += parse_line['time']
         if total % 100000 == 0:
             logging.info(f"read {total} line. Parsed {processed} line ")
+    # TODO: make args func checker
     checked_for_numbers_parsed_line(config, processed, total)
     return processed, total, total_time, dict_parsed_lines
 
@@ -160,6 +155,7 @@ def render_html(tables_for_list, config, date_report):
         os.mkdir(os.path.join(config.get('REPORT_DIR')))
         logging.info("report dir is created")
     name_report = get_report_name(date_report)
+    # TODO: make temp file
     report_path = os.path.join(config.get('REPORT_DIR'), name_report)
     with open(report_path, 'w') as report:
         report.write(template.safe_substitute(table_json=tables_for_list))
@@ -180,10 +176,7 @@ def get_report_name(date_report):
 
 def check_by_report_already_exist(path_to_report_dir, date):
     report_name = get_report_name(date)
-    if os.path.exists(os.path.join(path_to_report_dir, report_name)):
-        logging.info('Report already exist')
-        return True
-    return False
+    return os.path.exists(os.path.join(path_to_report_dir, report_name))
 
 
 def run_analyze(config):
@@ -192,6 +185,7 @@ def run_analyze(config):
         return True
     logging.info(f"last file is {last_file_log.path}")
     if check_by_report_already_exist(config.get('REPORT_DIR'), last_file_log.date):
+        logging.info('Report already exist')
         return True
     tables_for_list = analyze_log_file(last_file_log, config)
     render_html(tables_for_list, config, date_report=last_file_log.date)

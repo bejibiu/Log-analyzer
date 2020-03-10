@@ -53,7 +53,7 @@ def test_get_date_from_file():
 
 def test_get_invalid_date_from_file():
     date = get_date_from_name_log_file('20202212')
-    assert date is False
+    assert date is None
 
 
 @pytest.mark.parametrize("line, url, request_time", [
