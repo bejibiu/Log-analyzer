@@ -105,7 +105,8 @@ def make_reg_exp_for_line():
 def analyze_log_file(last_file_log, config):
     parsed_lines_gen = read_lines_gen(last_file_log)
 
-    processed, total, total_time, dict_parsed_lines = parsed_line(config, parsed_lines_gen)
+    processed, total, total_time, dict_parsed_lines = parsed_line(config, parsed_lines_gen,
+                                                                  checker_func=checked_for_numbers_parsed_line)
 
     url_time_dict = {url: {'time_sum': sum(dict_parsed_lines[url])} for url in dict_parsed_lines}
     most_common_url = heapq.nlargest(int(config.get('REPORT_SIZE')), url_time_dict,
@@ -125,7 +126,7 @@ def analyze_log_file(last_file_log, config):
     return table_list
 
 
-def parsed_line(config, parsed_lines_gen):
+def parsed_line(config, parsed_lines_gen, checker_func=None):
     dict_parsed_lines = defaultdict(list)
     processed = total = total_time = 0
     for parse_line in parsed_lines_gen:
@@ -136,8 +137,8 @@ def parsed_line(config, parsed_lines_gen):
             total_time += parse_line['time']
         if total % 100000 == 0:
             logging.info(f"read {total} line. Parsed {processed} line ")
-    # TODO: make args func checker
-    checked_for_numbers_parsed_line(config, processed, total)
+    if checker_func:
+        checker_func(config, processed, total)
     return processed, total, total_time, dict_parsed_lines
 
 
@@ -155,10 +156,11 @@ def render_html(tables_for_list, config, date_report):
         os.mkdir(os.path.join(config.get('REPORT_DIR')))
         logging.info("report dir is created")
     name_report = get_report_name(date_report)
-    # TODO: make temp file
     report_path = os.path.join(config.get('REPORT_DIR'), name_report)
-    with open(report_path, 'w') as report:
+    tmp_report_path = report_path + "~"
+    with open(tmp_report_path, 'w') as report:
         report.write(template.safe_substitute(table_json=tables_for_list))
+    os.rename(tmp_report_path, report_path)
     logging.info('report is create')
 
 

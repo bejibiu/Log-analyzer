@@ -19,5 +19,5 @@ def setup_config(path):
 
 def setup_logger(config):
     logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname).1s %(message)s',
-                        filename=config['Main'].get('LOG_FILE') if config['Main'].get('LOG_FILE') else None,
+                        filename=config['Main'].get('LOG_FILE'),
                         datefmt='%Y.%m.%d %H:%M:%S')
